@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: web:latest
+    networks:
+      - webnet
+    ports:
+      - "80:80"
+    deploy:
+      replicas: 5
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_DB=mydatabase
+      - POSTGRES_USER=myuser
+      - POSTGRES_PASSWORD=mypassword
+
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    networks:
+      - webnet
+    volumes:
+      - redis_data:/data
+
+  websocket:
+    build:
+      context: .
+      dockerfile: Dockerfilews
+    image: websocket_image:latest
+    networks:
+      - webnet
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+    deploy:
+      placement:
+        constraints:
+         - node.role == manager  
+  db:
+    image: postgres:latest
+    networks:
+      - webnet
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: mydatabase
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./provision/dump.sql:/docker-entrypoint-initdb.d/dump.sql
+
+
+  portainer:
+    image: portainer/portainer-ce:latest
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+    ports:
+      - "9000:9000"
+      - "9443:9443"
+    networks:
+      - webnet
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+
+networks:
+  webnet:
+    driver: overlay
+
+volumes:
+  pgdata:
+  portainer_data:
+  redis_data:
